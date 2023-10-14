@@ -3,7 +3,7 @@ package ru.biryuchev.MySecondTestAppSpringBoot.model;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 public enum Codes {
-    SUCCES("success"),
+    SUCCESS("success"),
     FAILED("failed");
 
     private final String name;
