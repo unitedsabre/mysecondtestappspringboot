@@ -41,9 +41,27 @@ public class MyController {
     @PostMapping(value = "/feedback")
     public ResponseEntity<Response> feedback(@Valid @RequestBody Request request,
                                              BindingResult bindingResult) {
-
         log.info("request: {}", request);
-        Response response = Response.builder()
+        Response response = createResponse(request);
+
+        log.info("response: {}", response);
+        try {
+            validationService.isValid(bindingResult);
+        } catch (ValidationFailedException e) {
+            return retErrorResponse(response, bindingResult, ErrorCodes.VALIDATION_EXCEPTION, ErrorMessages.VALIDATION, HttpStatus.BAD_REQUEST);
+        } catch (UnsupportedCodeException e) {
+            return retErrorResponse(response, bindingResult, ErrorCodes.UNSUPPORTED_EXCEPTION, ErrorMessages.UNSUPPORTED, HttpStatus.BAD_REQUEST);
+        } catch (Exception e) {
+            return retErrorResponse(response, bindingResult, ErrorCodes.UNKNOWN_EXCEPTION, ErrorMessages.UNKNOWN, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        modifyResponseService.modify(response);
+        modifyRequestService.modify(request);
+        modifyRequestService.sendTime(response, request);
+        return new ResponseEntity<>(modifyResponseService.modify(response), HttpStatus.OK);
+    }
+
+    private Response createResponse(Request request) {
+        return Response.builder()
                 .uid(request.getUid())
                 .operationUid(request.getOperationUid())
                 .systemTime(DataTimeUtil.getCustomFormat().format(new Date()))
@@ -51,33 +69,15 @@ public class MyController {
                 .errorCode(ErrorCodes.EMPTY)
                 .errorMessage(ErrorMessages.EMPTY)
                 .build();
+    }
 
-        log.info("response: {}", response);
-        try {
-            validationService.isValid(bindingResult);
-        } catch (ValidationFailedException e) {
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.VALIDATION_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.VALIDATION);
-            log.error("ValidationFailedException: {} {}", response, bindingResult.getFieldError());
-            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-        } catch (UnsupportedCodeException e) {
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.UNSUPPORTED_CODE_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.UID123);
-            log.error("UnsupportedCodeException: {} {} ", response, bindingResult.getFieldError());
-            return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
-        }
-        catch (Exception e) {
-            response.setCode(Codes.FAILED);
-            response.setErrorCode(ErrorCodes.UNKNOWN_EXCEPTION);
-            response.setErrorMessage(ErrorMessages.UNKNOWN);
-            log.error("Exception: {} {}", response, bindingResult.getFieldError());
-            return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-        modifyResponseService.modify(response);
-        modifyRequestService.modify(request);
-        modifyRequestService.sendTime(response, request);
-        return new ResponseEntity<>(modifyResponseService.modify(response), HttpStatus.OK);
+    ResponseEntity<Response> retErrorResponse(Response response, BindingResult bindingResult, ErrorCodes errorCode,
+                                              ErrorMessages errorMessage, HttpStatus httpStatus) {
+        response.setCode(Codes.FAILED);
+        response.setErrorCode(errorCode);
+        response.setErrorMessage(errorMessage);
+
+        log.error("error response: {} {}", response, bindingResult.getFieldError().getDefaultMessage());
+        return new ResponseEntity<>(response, httpStatus);
     }
 }
